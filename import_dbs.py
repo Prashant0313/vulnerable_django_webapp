@@ -1,4 +1,6 @@
 import csv
+import django
+django.setup()
 
 from LegacySite.models import Product, User
 

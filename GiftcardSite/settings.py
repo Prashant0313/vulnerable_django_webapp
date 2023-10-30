@@ -12,16 +12,24 @@ https://docs.djangoproject.com/en/3.0/ref/settings/
 
 import os
 import base64
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
+env = os.path.join(BASE_DIR, ".env")
+load_dotenv('.env')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'kmgysa#fz+9(z1*=c0ydrjizk*7sthm2ga1z4=^61$cxcq8b$l'
+testing_key = 'kmgysa#fz+9(z1*=c0ydrjizk*7sthm2ga1z4=^61$cxcq8b$l'
+SECRET_KEY = os.environ.get('KEY1')
+
+if SECRET_KEY is None:
+    SECRET_KEY = testing_key
+else:
+    SECRET_KEY = SECRET_KEY
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -46,6 +54,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware', 
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -149,7 +158,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 SESSION_COOKIE_SAMESITE = 'Lax'
 # Don't know if this is necessary but all this stupid security stuff just
 # makes my job harder
-SESSION_COOKIE_HTTPONLY = False
+SESSION_COOKIE_HTTPONLY = True
 
 # DO NOT delete line 156-158, this is for using Django/Gradescope integration
 # Also used for my own testing of autograder

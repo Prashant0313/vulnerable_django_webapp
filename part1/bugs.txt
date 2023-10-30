@@ -1,0 +1,41 @@
+1. XSS vulnerability: Reflected XSS
+
+- [views.py]: the aforementioned methods use a parameter 'director', which is an open variable - xss is exploited by attaching '?director=script>alert("hello.")</script>'to get requests for vulnerable websites
+- director|safe in templates 'item-single.html', 'gift.html': the safe tag disables the default auto escape in Django.
+- Using'safe' permits the insertion and execution of any script>/script> when supplied in the URL's 'director' query parameter.
+
+
+-> Examples:
+-> '/buy.html?director=<script>alert("hello.")</script>' [always displays alert(str)]
+
+
+FIX: fixed by removing 'safe' tag from 'director' attribute in templates, defaulting to django's escape tag functionality
+-------------------------------------------------------------------------------------------------------------------------------------
+2. CSRF vulnerability: Giftcard secretly given by overcoming 
+- 'gift_card_view(x,y)' takes a parameter 'username' which (even if escaped) causes a gift card to be immediately sent to the username 
+- exploited by appending '
+--a second exploitation using './part1/xsrf.html' open the file and click on the link 
+--If the victim user views xsrf.html, a gift card will be given to 'bad_user' right away.
+
+
+FIX: Double-protect the 'POST' method using crsf tokens, and provide password protection to vulnerable URLs via 'GET'. 
+
+-------------------------------------------------------------------------------------------------------------------------------------
+3. Vulnerability for SQL Injection: Get salted(password) 
+- using '/use.html' from template 'use-card.html' 
+- called by views.py'use_card_view(x)' 'card_query' directly loads variable'signature' from submitted(uploaded) card into SQL request 
+- Gifcard files may be produced, then submitted(uploaded) with signatures appended the SQL request using [' UNION]
+
+-> Sqli.gftcrd is an example file.
+-> Example files in '/part1' show how to get admin salted passwords from a database.
+
+FIX: Use the '.raw' method argument 'params' to properly quote'signature' without escaping to SQL query concatenation.
+------------------------------------------------------------------------------------------------------------------------------------
+4. Injection of Commands:
+- using 'use_card_view(x)' in views.py - [views.py]: using '/use.html' from template 'use-card.html' The parse_card_data(x,y) function tries to decode using json, but if that fails, it leverages platform executables to import binary data. 
+
+-> Exploitation via platform executables by reporting a JSONDecodeError (from inside the gifcard file).
+-> When utilizing executables, 'parse_card_data(x,y)' performs a system call directly in [extras.py].
+-> System call in './use.html' may be added by provided filename -> Exploitation in 'use.html' by uploading 'cmdi.gftcrd' with --> filename ='something & touch pwned &'
+
+FIX: modify the name of the supplied file in [views.py].'use_card_view(x)' prior to passing to [extras.py]parse_card_data(x,y) = Non-alpha numeric characters in the filename have been removed.

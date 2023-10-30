@@ -1,0 +1,78 @@
+- Using djfernet to implement database encryption
+
+Package: djfernet [API] – by the djfernet package
+
+NOTES: 1. Due to functionality difficulties, fields [username, password, using main key, using foreign key] CANNOT be encrypted. As a result, passwords are hashed before storage. This implies that the most plausible items to encrypt are product and card fields from the database's 'LegacySite_card' and 'LegacySite_product' columns.
+
+2. On the database, all encryption field types are exported as binary data 'BinaryField'.
+--- This implies that python migrations must be reversed in order to encrypt any data that is not already a binary field.
+
+
+Implementation steps [LOG]:
+1. Clean the whole database, removing all unencrypted data:
+-> $ python manage.py flush
+
+
+4. Re-migrate:
+-> $ python manage.py makemigrations LegacySite
+-> $ python manage.py migrate
+-> # python3 manage.py shell -c 'import import_dbs'
+
+4. Run site:
+-> $ python manage.py runserver
+
+5. Testing: Register users and test buying/gifting/using cards
+--- A list of users created for testing and more info in 'testing.txt'
+-> $ python manage.py dumpdata LegacySite > LegacySite/fixtures/testdata.json 
+--- Make folder 'LegacySite/fixtures' if not already made
+
+Choice of fields: [Card.data (req), Card.amount, Card.fp, Product.recommended_price, product_image_path]
+1. 'Card.data' encrypted as per assignment instructions so that stolen card cannot be used
+
+2. Chose to encrypt 'Card.amount', so that upon data breach, attacker cannot easily 
+--- view/use card with highest value
+
+3. Chose to encrypt 'Card.fp' [card_file_path], so that upon data breach, attacker cannot easily 
+--- view/use system's file path
+
+4. Chose to encrypt 'Product.recommended_price', so that upon data breach, attacker cannot easily 
+--- determine highest recommended valued card (for default values)
+
+5. Chose to encrypt 'Product.product_image_path', so that upon data breach, attacker cannot easily 
+--- determine system's file path
+
+NOTE: chose not to encrpyt other fields due to inability to encrypt (username,password,keys) or 
+- due to determination that data encrryption of these fields was not necessary
+
+Code changes due to encryption implementation:
+- 'LegacySite/models.py' changed to reflect new encrypted models
+- 'GiftcardSite/settings.py' changed so that secret key not displayed
+-- and is imported from environment variable (via '.env') file
+
+Key management strategy and explanation:
+-> $ pip install python-dotenv
+- Used environment variables to store key(s)
+- Use environment variables via '.env' file for multi-platform support 
+- Added '.env' file to '.gitignore' so that file remains untracked
+- Created 'gen_key.py' file so users can generate there own new keys if repo cloned
+- A testing key is given as defualt in 'settings.py' so that tests can run [DELETE on git clone] 
+
+- Django throws an error if SECRET_KEY is not set, therefore instead of using
+-- FERNET_KEYS[], decided to stick with SECRET_KEY
+- Used my own 'gen_key.py' file to create new unkown secret key
+
+- Decided to use environment variable to store key(s) as it was the easiest to implement safely
+- Used ".env" file method for multi-platform support and easy to add to '.gitignore'
+
+Creating your own SECRET_KEY:
+- clone this repo from github
+- [DELETE] 'testing' key and 'if:else:' block from settings.py
+-- should be: SECRET_KEY = os.environ.get('NAME')
+- in top level directory, create ".env" file
+- add '.env' file to '.gitignore'
+- install 'python-dotenv'
+- run 'gen_key.py'
+- Add 'NAME=[generatedkey]' to .env file
+
+-> $ pip install python-dotenv
+-> $ python gen_key.py

@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser
 from django.contrib.auth.backends import BaseBackend
 from . import extras
+from fernet_fields import *
 
 # Create your models here.
 class User(AbstractBaseUser):
@@ -31,15 +32,20 @@ class OurBackend(BaseBackend):
 class Product(models.Model):
     product_id = models.AutoField(primary_key=True)
     product_name = models.CharField(max_length=50, unique=True)
-    product_image_path = models.CharField(max_length=100, unique=True)
-    recommended_price = models.IntegerField()
+    # Encrypted product image path [rtb325]
+    product_image_path = EncryptedCharField(max_length=100)
+    # Encrypted product recommended price [rtb325]
+    recommended_price = EncryptedIntegerField()
     description = models.CharField(max_length=250)
 
 class Card(models.Model):
     id = models.AutoField(primary_key=True)
-    data = models.BinaryField(unique=True)
+    # Encrypted card data [rtb325]
+    data = EncryptedCharField(max_length=1000)
     product = models.ForeignKey('LegacySite.Product', on_delete=models.CASCADE, default=None)
-    amount = models.IntegerField()
-    fp = models.CharField(max_length=100, unique=True)
+    # Encrypted card amount [rtb325]
+    amount = EncryptedIntegerField()
+    # Encrypted card file path [rtb325]
+    fp = EncryptedCharField(max_length=100)
     user = models.ForeignKey('LegacySite.User', on_delete=models.CASCADE)
     used = models.BooleanField(default=False)

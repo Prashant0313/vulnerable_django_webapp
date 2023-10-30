@@ -7,7 +7,8 @@ from . import extras
 from django.views.decorators.csrf import csrf_protect as csrf_protect
 from django.contrib.auth import login, authenticate, logout
 from django.core.exceptions import ObjectDoesNotExist
-import os, tempfile
+import os, tempfile, re
+from fernet_fields import *
 
 SALT_LEN = 16
 
@@ -18,6 +19,7 @@ def index(request):
     return render(request, "index.html", context)
 
 # Register for the service.
+@csrf_protect #[rtb325]
 def register_view(request):
     if request.method == 'GET':
         return render(request, "register.html", {'method':'GET'})
@@ -26,8 +28,17 @@ def register_view(request):
         uname = request.POST.get('uname', None)
         pword = request.POST.get('pword', None)
         pword2 = request.POST.get('pword2', None)
+        # if registered user exists error fix [rtb325]
+        try:
+            User.objects.get(username=uname)
+            if User.objects.get(username=uname) is not None:
+                context["success"] = False
+                return render(request, "register.html", context)
+        except:
+            pass
         assert (None not in [uname, pword, pword2])
-        if pword != pword2:
+        # blank user and pass fix [rtb325]
+        if pword != pword2 or uname == "" or pword== "":
             context["success"] = False
             return render(request, "register.html", context)
         salt = extras.generate_salt(SALT_LEN)
@@ -39,6 +50,7 @@ def register_view(request):
         
 
 # Log into the service.
+@csrf_protect #[rtb325]
 def login_view(request):
     if request.method == "GET":
         return render(request, "login.html", {'method':'GET', 'failed':False})
@@ -63,6 +75,7 @@ def logout_view(request):
         logout(request)
     return redirect("index.html")
 
+@csrf_protect #[rtb325]
 def buy_card_view(request, prod_num=0):
     if request.method == 'GET':
         context = {"prod_num" : prod_num}
@@ -86,6 +99,9 @@ def buy_card_view(request, prod_num=0):
         context['description'] = prod.description
         return render(request, "item-single.html", context)
     elif request.method == 'POST':
+        # buy when not logged in fix [rtb325]
+        if not request.user.is_authenticated:
+            return redirect("/login.html")
         if prod_num == 0:
             prod_num = 1
         num_cards = len(Card.objects.filter(user=request.user))
@@ -112,11 +128,11 @@ def buy_card_view(request, prod_num=0):
         return redirect("/buy/1")
 
 # KG: What stops an attacker from making me buy a card for him?
+@csrf_protect #[rtb325]
 def gift_card_view(request, prod_num=0):
     context = {"prod_num" : prod_num}
-    if request.method == "GET" and 'username' not in request.GET:
-        if not request.user.is_authenticated:
-            return redirect("/login.html")
+    # CSRF 'get' protection
+    if request.method == "GET" and ('username' not in request.GET or 'password' not in request.GET):
         request.GET.get('director', None)
         context['user'] = None
         director = request.GET.get('director', None)
@@ -138,17 +154,15 @@ def gift_card_view(request, prod_num=0):
         context['description'] = prod.description
         return render(request, "gift.html", context)
     # Hack: older partner sites only support GET, so special case this.
-    elif request.method == "POST" \
-        or request.method == "GET" and 'username' in request.GET:
+    # CSRF Fix [rtb325]: double protect 'POST' with csrf tokens
+    elif request.method == "POST":
         if not request.user.is_authenticated:
             return redirect("/login.html")
         if prod_num == 0:
             prod_num = 1
-        # Get vars from either post or get
-        user = request.POST.get('username', None) \
-            if request.method == "POST" else request.GET.get('username', None)
-        amount = request.POST.get('amount', None) \
-            if request.method == "POST" else request.GET.get('amount', None)
+        # Get vars from post
+        user = request.POST.get('username', None) 
+        amount = request.POST.get('amount', None) 
         if user is None:
             return HttpResponse("ERROR 404")
         try:
@@ -171,16 +185,47 @@ def gift_card_view(request, prod_num=0):
         card_data = card_file.read()
         card = Card(data=card_data, product=prod,
                     amount=amount, fp=card_file_path, user=user_account)
+       
+        card.save()
+        card_file.close()
+        return render(request, f"gift.html", context)
+    # CSRF Fix [rtb325]: protect 'GET' URL with password
+    elif request.method == "GET" and 'username' in request.GET and 'password' in request.GET:
+        if not request.user.is_authenticated:
+            return redirect("/login.html")
+        if prod_num == 0:
+            prod_num = 1
+        # Get vars from get
+        usr = request.GET.get('username', None)
+        pw = request.GET.get('password', None)
+        if usr is None or pw is None:
+            return HttpResponse("ERROR 404")
         try:
-            card.save()
-        except IntegrityError:
-            # for some reason after we gift a card through GET we get
-            # an IntegrityError here, but the card is saved. So just
-            # ignore it.
-            pass
+            success = authenticate(username=request.user, password=pw)
+            user_account = User.objects.get(username=usr)
+        except:
+            success = None
+            user_account = None
+        if user_account is None or success is None:
+            context['user'] = None
+            return render(request, f"gift.html", context)
+        context['user'] = user_account
+        num_cards = len(Card.objects.filter(user=user_account))
+        card_file_path = os.path.join(tempfile.gettempdir(), f"addedcard_{user_account.id}_{num_cards + 1}.gftcrd")
+        #extras.write_card_data(card_file_path)
+        prod = Product.objects.get(product_id=prod_num)
+        amount = prod.recommended_price
+        extras.write_card_data(card_file_path, prod, amount, request.user)
+        prod = Product.objects.get(product_id=prod_num)
+        card_file = open(card_file_path, 'rb')
+        card_data = card_file.read()
+        card = Card(data=card_data, product=prod,
+                    amount=amount, fp=card_file_path, user=user_account)
+        card.save()
         card_file.close()
         return render(request, f"gift.html", context)
 
+@csrf_protect #[rtb325]  
 def use_card_view(request):
     context = {'card_found':None}
     if request.method == 'GET':
@@ -197,21 +242,39 @@ def use_card_view(request):
         # Post with specific card, use this card.
         context['card_list'] = None
         # Need to write this to parse card type.
-        card_file_data = request.FILES['card_data']
+        # Fix no card or name given [rtb325]
+        try:
+            card_file_data = request.FILES['card_data']
+        except:
+            return render(request, 'use-card.html', context)
         card_fname = request.POST.get('card_fname', None)
         if card_fname is None or card_fname == '':
             card_file_path = os.path.join(tempfile.gettempdir(), f'newcard_{request.user.id}_parser.gftcrd')
         else:
-            card_file_path = os.path.join(tempfile.gettempdir(), f'{card_fname}_{request.user.id}_parser.gftcrd')
+            # Command injection fix: [rtb325]
+            card_fname_check = card_fname.strip()
+            # split by any non-alpha numeric character [rtb325]
+            card_fname_check_parts = re.split('[\b\W\b]+', card_fname_check)
+            card_fname_checked = ''
+            for i in card_fname_check_parts:
+                card_fname_checked += i.strip()
+            card_file_path = os.path.join(tempfile.gettempdir(), f'{card_fname_checked}_{request.user.id}_parser.gftcrd')
+        # rtb325: views.py[card_file_path] = extras.py[card_path_name]
         card_data = extras.parse_card_data(card_file_data.read(), card_file_path)
         # check if we know about card.
         # KG: Where is this data coming from? RAW SQL usage with unkown
         # KG: data seems dangerous.
         print(card_data.strip())
-        signature = json.loads(card_data)['records'][0]['signature']
+        try:
+            # fix JSON decode error page [rtb325]
+            signature = json.loads(card_data)['records'][0]['signature']
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            signature = extras.get_fake_signature(card_data)
+            pass
         # signatures should be pretty unique, right?
-        card_query = Card.objects.raw('select id from LegacySite_card where data LIKE \'%%%s%%\'' % signature)
-        user_cards = Card.objects.raw('select id, count(*) as count from LegacySite_card where LegacySite_card.user_id = %s' % str(request.user.id))
+        # SQLi fix: [rtb325]
+        card_query = Card.objects.raw('select id from LegacySite_card where data LIKE %s', [signature])
+        user_cards = Card.objects.raw('select id, count(*) as count from LegacySite_card where LegacySite_card.user_id = %s', [str(request.user.id)])
         card_query_string = ""
         print("Found %s cards" % len(card_query))
         for thing in card_query:
@@ -250,4 +313,3 @@ def use_card_view(request):
         context['card_list'] = user_cards
         return render(request, "use-card.html", context)
     return HttpResponse("Error 404: Internal Server Error")
-

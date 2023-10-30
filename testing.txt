@@ -1,0 +1,22 @@
+- Path errors [linux]
+-> $ export PYTHONPATH="${PYTHONPATH}:/home/user/path/appsec_hw2"
+
+
+- Settings errors [linux]
+-> $ export DJANGO_SETTINGS_MODULE=GiftcardSite.settings
+
+
+- Database interaction
+-> $ sqlite3 db.sqlite3
+-> sqlite> .schema LegacySite_card; 
+-> sqlite> .exit
+- Clean whole database: python manage.py flush
+- Restore original values; python import_dbs.py
+
+- Self created users, pass's
+-> bad_user, pass123
+-> user1, suser1
+-> user2, user2
+
+- Testing
+-> python manage.py dumpdata LegacySite > LegacySite/fixtures/testdata.json
