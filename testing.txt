@@ -11,7 +11,7 @@
 -> sqlite> .schema LegacySite_card; 
 -> sqlite> .exit
 - Clean whole database: python manage.py flush
-- Restore original values; python import_dbs.py
+- Restore original values; python3 manage.py shell -c  'import import_dbs'
 
 - Self created users, pass's
 -> bad_user, pass123
