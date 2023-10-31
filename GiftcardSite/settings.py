@@ -23,8 +23,8 @@ load_dotenv('.env')
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-# Attempt to read the SECRET_KEY from the 'KEY1' environment variable
-SECRET_KEY = os.environ.get('KEY1')
+# Attempt to read the SECRET_KEY from the 'SECRET_KEY' environment variable
+SECRET_KEY = os.environ.get('SECRET_KEY')
 
 # If 'KEY1' is not set, use the testing_key as a fallback
 if SECRET_KEY is None:

@@ -225,47 +225,91 @@ def gift_card_view(request, prod_num=0):
         card_file.close()
         return render(request, f"gift.html", context)
 
-@csrf_protect
+@csrf_protect #[rtb325]  
 def use_card_view(request):
-    context = {'card_found': None}
-    
-    if request.method == "POST" and 'card_data' in request.FILES:
-        card_file_data = request.FILES['card_data']
+    context = {'card_found':None}
+    if request.method == 'GET':
+        if not request.user.is_authenticated:
+            return redirect("login.html")
+        try:
+            user_cards = Card.objects.filter(user=request.user).filter(used=False)
+        except ObjectDoesNotExist:
+            user_cards = None
+        context['card_list'] = user_cards
+        context['card'] = None
+        return render(request, 'use-card.html', context)
+    elif request.method == "POST" and request.POST.get('card_supplied', False):
+        # Post with specific card, use this card.
+        context['card_list'] = None
+        # Need to write this to parse card type.
+        # Fix no card or name given [rtb325]
+        try:
+            card_file_data = request.FILES['card_data']
+        except:
+            return render(request, 'use-card.html', context)
         card_fname = request.POST.get('card_fname', None)
-        
         if card_fname is None or card_fname == '':
             card_file_path = os.path.join(tempfile.gettempdir(), f'newcard_{request.user.id}_parser.gftcrd')
         else:
+            # Command injection fix: [rtb325]
             card_fname_check = card_fname.strip()
-            card_fname_checked = re.sub(r'\W', '', card_fname_check)
+            # split by any non-alpha numeric character [rtb325]
+            card_fname_check_parts = re.split('[\b\W\b]+', card_fname_check)
+            card_fname_checked = ''
+            for i in card_fname_check_parts:
+                card_fname_checked += i.strip()
             card_file_path = os.path.join(tempfile.gettempdir(), f'{card_fname_checked}_{request.user.id}_parser.gftcrd')
-        
-        card_data = card_file_data.read()
-        
+        # rtb325: views.py[card_file_path] = extras.py[card_path_name]
+        card_data = extras.parse_card_data(card_file_data.read(), card_file_path)
+        # check if we know about card.
+        # KG: Where is this data coming from? RAW SQL usage with unkown
+        # KG: data seems dangerous.
+        print(card_data.strip())
         try:
-            card_data_json = json.loads(card_data)
-            signature = card_data_json['records'][0]['signature']
-        except (json.JSONDecodeError, UnicodeDecodeError, KeyError):
+            # fix JSON decode error page [rtb325]
+            signature = json.loads(card_data)['records'][0]['signature']
+        except (json.JSONDecodeError, UnicodeDecodeError):
             signature = extras.get_fake_signature(card_data)
-        
-        card_query = Card.objects.filter(data__icontains=signature)
-        user_cards = Card.objects.filter(user=request.user, used=False)
-        
-        if not card_query.exists():
-            if card_fname:
-                card_file_path = os.path.join(tempfile.gettempdir(), f'{card_fname_checked}_{request.user.id}_{user_cards.count() + 1}.gftcrd')
+            pass
+        # signatures should be pretty unique, right?
+        # SQLi fix: [rtb325]
+        card_query = Card.objects.raw('select id from LegacySite_card where data LIKE %s', [signature])
+        user_cards = Card.objects.raw('select id, count(*) as count from LegacySite_card where LegacySite_card.user_id = %s', [str(request.user.id)])
+        card_query_string = ""
+        print("Found %s cards" % len(card_query))
+        for thing in card_query:
+            # print cards as strings
+            card_query_string += str(thing) + '\n'
+        if len(card_query) == 0:
+            # card not known, add it.
+            if card_fname is not None:
+                card_file_path = os.path.join(tempfile.gettempdir(), f'{card_fname}_{request.user.id}_{user_cards[0].count + 1}.gftcrd')
             else:
-                card_file_path = os.path.join(tempfile.gettempdir(), f'newcard_{request.user.id}_{user_cards.count() + 1}.gftcrd')
-            
-            with open(card_file_path, 'wb') as fp:
-                fp.write(card_data)
-            
+                card_file_path = os.path.join(tempfile.gettempdir(), f'newcard_{request.user.id}_{user_cards[0].count + 1}.gftcrd')
+            fp = open(card_file_path, 'wb')
+            fp.write(card_data)
+            fp.close()
             card = Card(data=card_data, fp=card_file_path, user=request.user, used=True)
-            card.save()
         else:
-            context['card_found'] = card_query.first()
-        
-        context['card'] = card  # Corrected context key
+            context['card_found'] = card_query_string
+            try:
+                card = Card.objects.get(data=card_data)
+                card.used = True
+                card.save()
+            except ObjectDoesNotExist:
+                print("No card found with data =", card_data)
+                card = None
+        context['card'] = card
+        return render(request, "use-card.html", context) 
+    elif request.method == "POST":
+        card = Card.objects.get(id=request.POST.get('card_id', None))
+        card.used=True
+        card.save()
+        context['card'] = card
+        try:
+            user_cards = Card.objects.filter(user=request.user).filter(used=False)
+        except ObjectDoesNotExist:
+            user_cards = None
+        context['card_list'] = user_cards
         return render(request, "use-card.html", context)
-
-    return HttpResponse("Error: Bad Request", status=400)
+    return HttpResponse("Error 404: Internal Server Error")
