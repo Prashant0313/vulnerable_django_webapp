@@ -51,7 +51,7 @@ class MyTest(TestCase):
     def test_os_ci(self):
         self.client.login(username="bad_user", password="pass123")
         filename = os.path.join(dirname, '../part1/cmdi.gftcrd')
-        fname = "echo command_injection & ls"
+        fname = "touch pwend"
         with open(filename, "rb") as fp:
             print("Command injection giftcard test-> filename = '", fname, "': ", end="")
             response = self.client.post("/use.html", {"card_data": fp, "card_supplied": True, "card_fname": fname})

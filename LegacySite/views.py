@@ -8,7 +8,6 @@ from django.views.decorators.csrf import csrf_protect as csrf_protect
 from django.contrib.auth import login, authenticate, logout
 from django.core.exceptions import ObjectDoesNotExist
 import os, tempfile, re
-from fernet_fields import *
 
 SALT_LEN = 16
 
